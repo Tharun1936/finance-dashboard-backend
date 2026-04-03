@@ -1,15 +1,25 @@
-// Validation helper - turns express-validator errors into a clean response
-// We use express-validator in our routes to check incoming data
-// If anything is wrong, this middleware catches those errors and responds
+// Validation helper
+// express-validator v7 ValidationChain objects must be run using .run(req)
+// They don't work as direct middleware arguments in modern Express versions
+//
+// How to use:
+//   router.post('/route', validate([body('field').notEmpty()]), controller)
+//
+// validate() runs all validators, then checks for errors and either:
+//   - returns a 400 with the error list, OR
+//   - calls next() to continue to the controller
 
 const { validationResult } = require('express-validator');
 
-const handleValidationErrors = (req, res, next) => {
-  // Check if there are any validation errors from the route validators
+// Takes an array of ValidationChain objects, runs them all, then checks errors
+const validate = (validators) => async (req, res, next) => {
+  // Run every validator against the request (this is the v7 recommended way)
+  await Promise.all(validators.map(v => v.run(req)));
+
+  // Now check if any of them found errors
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
-    // Format the errors nicely so the frontend knows exactly what's wrong
     const errorList = errors.array().map(err => ({
       field: err.path,
       message: err.msg
@@ -22,8 +32,8 @@ const handleValidationErrors = (req, res, next) => {
     });
   }
 
-  // No errors, move on
+  // All good — move on to the controller
   next();
 };
 
-module.exports = { validationResult: handleValidationErrors };
+module.exports = { validate };

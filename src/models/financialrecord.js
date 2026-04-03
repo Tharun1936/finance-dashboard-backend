@@ -78,13 +78,12 @@ financialRecordSchema.index({ type: 1, category: 1 });
 // --- Auto-filter soft deleted records ---
 // Whenever we do a .find(), automatically skip records that are deleted
 // So we don't have to remember to add {isDeleted: false} everywhere
-financialRecordSchema.pre(/^find/, function (next) {
-  // Skip this filter if we specifically opted out (used in restore admin route)
-  if (this._skipDeletedFilter) {
-    return next();
-  }
+financialRecordSchema.pre(/^find/, async function () {
+  // In Mongoose, using async/Promise-style hooks avoids relying on a `next` callback.
+  // Skip this filter if we specifically opted out (used in restore admin route).
+  if (this._skipDeletedFilter) return;
+
   this.where({ isDeleted: false });
-  next();
 });
 
 module.exports = mongoose.model('FinancialRecord', financialRecordSchema);

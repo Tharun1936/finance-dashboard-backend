@@ -53,15 +53,14 @@ const userSchema = new mongoose.Schema(
 // --- Hash password before saving to database ---
 // We never store plain text passwords - that's a huge security risk!
 // This runs automatically before every .save()
-userSchema.pre('save', async function (next) {
+//
+// Use async/Promise style so Mongoose doesn't require a `next` callback.
+userSchema.pre('save', async function () {
   // Only hash if the password was actually changed
-  if (!this.isModified('password')) {
-    return next();
-  }
+  if (!this.isModified('password')) return;
 
   // 12 is the "salt rounds" - higher = more secure but slower
   this.password = await bcrypt.hash(this.password, 12);
-  next();
 });
 
 // --- Method to check if a password is correct during login ---
