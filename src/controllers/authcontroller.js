@@ -1,73 +1,117 @@
-const User = require('../models/user');
+// Auth Controller
+// Handles everything related to user accounts:
+// - Register (create account)
+// - Login (get a token)
+// - Logout (invalidate token)
+// - Get current user info
+
 const jwt = require('jsonwebtoken');
-const tokenBlacklistModel = require('../models/blacklistmodel');
+const User = require('../models/user');
+const BlacklistToken = require('../models/blacklistmodel');
 
-// ─── Helper: generate JWT ──────────────────────────────────────────────────────
-const signToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+// Helper function to create a JWT token for a user
+// We put the user's ID inside the token, not their password or role (security!)
+function createToken(userId) {
+  return jwt.sign(
+    { id: userId },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }  // token expires in 7 days
+  );
+}
 
-// ─── POST /api/auth/register ───────────────────────────────────────────────────
+// --- REGISTER ---
+// POST /api/auth/register
+// Anyone can call this to create a new account
 const register = async (req, res) => {
   try {
     const { username, email, password, role } = req.body;
 
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    // Check if someone already registered with this email or username
+    const existingUser = await User.findOne({
+      $or: [{ email: email }, { username: username }]
+    });
+
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: 'A user with that email or username already exists'
+        message: 'An account with that email or username already exists'
       });
     }
 
-    // Only admins can create other admins — open registration yields viewer/analyst
-    const assignedRole = role || 'viewer';
-    const user = new User({ username, email, password, role: assignedRole });
-    await user.save();
+    // Create the new user (password gets hashed automatically in the model)
+    const newUser = new User({
+      username: username,
+      email: email,
+      password: password,
+      role: role || 'viewer'  // default to viewer if no role given
+    });
 
-    const token = signToken(user._id);
+    await newUser.save();
+
+    // Generate a token so the user is automatically logged in after registering
+    const token = createToken(newUser._id);
 
     res.status(201).json({
       success: true,
-      message: 'Account created successfully',
+      message: 'Account created successfully!',
       data: {
         user: {
-          id: user._id,
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          status: user.status
+          id: newUser._id,
+          username: newUser.username,
+          email: newUser.email,
+          role: newUser.role,
+          status: newUser.status
         },
-        token
+        token: token
       }
     });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
 
-// ─── POST /api/auth/login ─────────────────────────────────────────────────────
+// --- LOGIN ---
+// POST /api/auth/login
+// User sends email + password, we send back a JWT token
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).select('+password');
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
+    // Find the user by email
+    // We need .select('+password') because password has select:false in the model
+    const user = await User.findOne({ email: email }).select('+password');
 
-    if (user.status === 'inactive') {
-      return res.status(403).json({
+    // If no user found with that email
+    if (!user) {
+      return res.status(401).json({
         success: false,
-        message: 'Your account has been deactivated. Please contact an administrator.'
+        message: 'Incorrect email or password'
       });
     }
 
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    // Check if the account is deactivated by admin
+    if (user.status === 'inactive') {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact an admin.'
+      });
     }
 
-    const token = signToken(user._id);
+    // Compare the entered password with the hashed one in the database
+    const isPasswordCorrect = await user.comparePassword(password);
+    if (!isPasswordCorrect) {
+      return res.status(401).json({
+        success: false,
+        message: 'Incorrect email or password'
+      });
+    }
+
+    // Everything is good - create a token and send it back
+    const token = createToken(user._id);
 
     res.json({
       success: true,
@@ -80,31 +124,46 @@ const login = async (req, res) => {
           role: user.role,
           status: user.status
         },
-        token
+        token: token
       }
     });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
 
-// ─── POST /api/auth/logout ────────────────────────────────────────────────────
+// --- LOGOUT ---
+// POST /api/auth/logout
+// We add the token to a blacklist so it can't be used again
 const logout = async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(400).json({ success: false, message: 'No token provided' });
-    }
+    // Get the token from the request header
+    const token = req.header('Authorization').replace('Bearer ', '');
 
-    await tokenBlacklistModel.create({ token });
+    // Save it to the blacklist in the database
+    await BlacklistToken.create({ token: token });
 
-    res.json({ success: true, message: 'Logged out successfully' });
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
 
-// ─── GET /api/auth/me ─────────────────────────────────────────────────────────
+// --- GET ME ---
+// GET /api/auth/me
+// Returns the profile of whoever is currently logged in
+// We know who they are because auth middleware already set req.user
 const getMe = async (req, res) => {
   res.json({
     success: true,
