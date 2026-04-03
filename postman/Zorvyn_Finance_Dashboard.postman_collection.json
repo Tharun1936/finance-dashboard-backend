@@ -1,0 +1,665 @@
+{
+  "info": {
+    "name": "Zorvyn — Finance Dashboard API",
+    "_postman_id": "zorvyn-finance-dashboard-v1",
+    "description": "Complete REST API documentation for the Zorvyn Finance Dashboard backend.\n\n## Setup\n1. Import this collection into Postman.\n2. Import the accompanying `Zorvyn_Environment.postman_environment.json` file.\n3. Select the **Zorvyn - Finance Dashboard** environment.\n4. Run **Login** first — the token is saved automatically via a test script.\n5. All subsequent requests use `{{token}}` from the environment.\n\n## Roles\n- **viewer** — Read own records + own dashboard\n- **analyst** — Create/update/delete (own) records + global view\n- **admin** — Full access including user management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth",
+      "description": "Authentication endpoints — register, login, logout, and current user profile.",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"john_doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"secret123\",\n  \"role\": \"viewer\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Create a new user account. `role` is optional — defaults to `viewer`.\n\nAvailable roles: `viewer`, `analyst`, `admin`\n\n**Validation rules:**\n- `username`: 3–30 characters, unique\n- `email`: valid format, unique\n- `password`: minimum 6 characters"
+          },
+          "response": [
+            {
+              "name": "201 — Created",
+              "status": "Created",
+              "code": 201,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Account created successfully\",\n  \"data\": {\n    \"user\": {\n      \"id\": \"661f1a2b3c4d5e6f7a8b9c0d\",\n      \"username\": \"john_doe\",\n      \"email\": \"john@example.com\",\n      \"role\": \"viewer\",\n      \"status\": \"active\"\n    },\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n  }\n}"
+            },
+            {
+              "name": "409 — Duplicate user",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A user with that email or username already exists\"\n}"
+            },
+            {
+              "name": "400 — Validation error",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    { \"field\": \"email\", \"message\": \"Valid email is required\" },\n    { \"field\": \"password\", \"message\": \"Password must be at least 6 characters\" }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data && res.data.token) {",
+                  "    pm.environment.set('token', res.data.token);",
+                  "    pm.environment.set('userId', res.data.user.id);",
+                  "    pm.environment.set('userRole', res.data.user.role);",
+                  "    console.log('✅ Token saved. Role:', res.data.user.role);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"secret123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Authenticate with email and password.\n\n✅ **Auto-saves** `token`, `userId`, and `userRole` to environment variables after a successful login — no manual copy-paste needed."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"user\": {\n      \"id\": \"661f1a2b3c4d5e6f7a8b9c0d\",\n      \"username\": \"john_doe\",\n      \"email\": \"john@example.com\",\n      \"role\": \"viewer\",\n      \"status\": \"active\"\n    },\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n  }\n}"
+            },
+            {
+              "name": "401 — Invalid credentials",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid credentials\"\n}"
+            },
+            {
+              "name": "403 — Inactive account",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Your account has been deactivated. Please contact an administrator.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] },
+            "description": "Returns the profile of the currently authenticated user.\n\n🔐 Requires: `Authorization: Bearer {{token}}`"
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"661f1a2b3c4d5e6f7a8b9c0d\",\n    \"username\": \"john_doe\",\n    \"email\": \"john@example.com\",\n    \"role\": \"viewer\",\n    \"status\": \"active\",\n    \"createdAt\": \"2026-04-01T10:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success) {",
+                  "    pm.environment.unset('token');",
+                  "    pm.environment.unset('userId');",
+                  "    pm.environment.unset('userRole');",
+                  "    console.log('✅ Token cleared from environment.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] },
+            "description": "Invalidates the current JWT by adding it to a blacklist in the database. After logout, that token will be rejected even before it expires.\n\n🔐 Requires: `Authorization: Bearer {{token}}`\n\n✅ Auto-clears `token` from environment on success."
+          },
+          "response": [
+            {
+              "name": "200 — Logged out",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Logged out successfully\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "👥 User Management",
+      "description": "Admin-only endpoints for managing users — list, get, update role/status, delete.\n\n🔐 All routes require: `Authorization: Bearer {{token}}` with **admin** role.",
+      "item": [
+        {
+          "name": "List All Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=10&role=viewer&status=active&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "page", "value": "1", "description": "Page number (default: 1)" },
+                { "key": "limit", "value": "10", "description": "Results per page (max: 100)" },
+                { "key": "role", "value": "viewer", "description": "Filter by role: viewer | analyst | admin", "disabled": true },
+                { "key": "status", "value": "active", "description": "Filter by status: active | inactive", "disabled": true },
+                { "key": "search", "value": "", "description": "Search by username or email", "disabled": true }
+              ]
+            },
+            "description": "Returns a paginated list of all users.\n\n**Filters (all optional):**\n- `page` — page number\n- `limit` — results per page (max 100)\n- `role` — filter by role\n- `status` — filter by status\n- `search` — search in username or email\n\n🔐 Admin only"
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"users\": [\n      {\n        \"_id\": \"661f1a2b3c4d5e6f7a8b9c0d\",\n        \"username\": \"john_doe\",\n        \"email\": \"john@example.com\",\n        \"role\": \"viewer\",\n        \"status\": \"active\",\n        \"createdAt\": \"2026-04-01T10:00:00.000Z\"\n      }\n    ],\n    \"pagination\": {\n      \"current\": 1,\n      \"pages\": 3,\n      \"total\": 25\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            },
+            "description": "Get detailed info for a specific user by their MongoDB `_id`.\n\n🔐 Admin only"
+          },
+          "response": [
+            {
+              "name": "200 — Found",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"_id\": \"661f1a2b3c4d5e6f7a8b9c0d\",\n    \"username\": \"john_doe\",\n    \"email\": \"john@example.com\",\n    \"role\": \"viewer\",\n    \"status\": \"active\",\n    \"createdAt\": \"2026-04-01T10:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 — Not found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"User not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update User Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/role",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}", "role"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"analyst\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Promote or demote a user's role.\n\n**Valid roles:** `viewer` · `analyst` · `admin`\n\n⚠️ Admins cannot change their own role.\n\n🔐 Admin only"
+          },
+          "response": [
+            {
+              "name": "200 — Updated",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"User role updated\",\n  \"data\": {\n    \"_id\": \"661f1a2b3c4d5e6f7a8b9c0d\",\n    \"username\": \"john_doe\",\n    \"role\": \"analyst\",\n    \"status\": \"active\"\n  }\n}"
+            },
+            {
+              "name": "400 — Self-modification blocked",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"You cannot change your own role\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update User Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}", "status"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"inactive\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Activate or deactivate a user account. Inactive users cannot log in.\n\n**Valid values:** `active` · `inactive`\n\n⚠️ Admins cannot change their own status.\n\n🔐 Admin only"
+          },
+          "response": [
+            {
+              "name": "200 — Deactivated",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"User deactivated successfully\",\n  \"data\": {\n    \"_id\": \"661f1a2b3c4d5e6f7a8b9c0d\",\n    \"username\": \"john_doe\",\n    \"status\": \"inactive\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            },
+            "description": "Permanently deletes a user account. This action cannot be undone.\n\n⚠️ Admins cannot delete their own account.\n\n🔐 Admin only"
+          },
+          "response": [
+            {
+              "name": "200 — Deleted",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"User deleted successfully\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "💰 Financial Records",
+      "description": "CRUD operations for financial records — income, expenses, categories.\n\n**Role behavior:**\n- Viewers: read own records only\n- Analysts: create/update/soft-delete own records; read all\n- Admins: full access including hard delete and restore\n\n🔐 All routes require: `Authorization: Bearer {{token}}`",
+      "item": [
+        {
+          "name": "List Records",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/records?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["records"],
+              "query": [
+                { "key": "page", "value": "1", "description": "Page number" },
+                { "key": "limit", "value": "10", "description": "Records per page (max: 100)" },
+                { "key": "type", "value": "expense", "description": "Filter: income | expense", "disabled": true },
+                { "key": "category", "value": "salary", "description": "Partial match on category", "disabled": true },
+                { "key": "startDate", "value": "2026-01-01", "description": "ISO 8601 start date", "disabled": true },
+                { "key": "endDate", "value": "2026-03-31", "description": "ISO 8601 end date", "disabled": true },
+                { "key": "search", "value": "coffee", "description": "Search category + description", "disabled": true },
+                { "key": "sortBy", "value": "amount", "description": "date | amount | category", "disabled": true },
+                { "key": "sortOrder", "value": "desc", "description": "asc | desc", "disabled": true }
+              ]
+            },
+            "description": "Returns a paginated list of financial records.\n\n**Viewer:** sees only their own records.\n**Analyst / Admin:** sees all records across all users.\n\n**Available filters (all optional):**\n- `type` — `income` or `expense`\n- `category` — partial match\n- `startDate` / `endDate` — date range (ISO 8601)\n- `search` — full-text in category + description\n- `sortBy` — `date` (default) | `amount` | `category`\n- `sortOrder` — `desc` (default) | `asc`"
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"records\": [\n      {\n        \"_id\": \"661f2b3c4d5e6f7a8b9c0d1e\",\n        \"amount\": 1500,\n        \"type\": \"income\",\n        \"category\": \"Salary\",\n        \"date\": \"2026-04-01T00:00:00.000Z\",\n        \"description\": \"Monthly salary for April\",\n        \"tags\": [\"salary\", \"monthly\"],\n        \"createdBy\": { \"_id\": \"661f1a2b...\", \"username\": \"john_doe\" },\n        \"createdAt\": \"2026-04-01T10:00:00.000Z\"\n      }\n    ],\n    \"pagination\": {\n      \"current\": 1,\n      \"pages\": 5,\n      \"total\": 47\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Record by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/records/{{recordId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["records", "{{recordId}}"]
+            },
+            "description": "Fetch a single financial record by its ID.\n\nViewers can only access their own records. Analysts and admins can access any."
+          },
+          "response": [
+            {
+              "name": "200 — Found",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"_id\": \"661f2b3c4d5e6f7a8b9c0d1e\",\n    \"amount\": 1500,\n    \"type\": \"income\",\n    \"category\": \"Salary\",\n    \"date\": \"2026-04-01T00:00:00.000Z\",\n    \"description\": \"Monthly salary for April\",\n    \"tags\": [\"salary\", \"monthly\"],\n    \"isDeleted\": false,\n    \"createdBy\": { \"_id\": \"661f1a2b...\", \"username\": \"john_doe\", \"email\": \"john@example.com\" }\n  }\n}"
+            },
+            {
+              "name": "404 — Not found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Record not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Record",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data && res.data._id) {",
+                  "    pm.environment.set('recordId', res.data._id);",
+                  "    console.log('✅ recordId saved:', res.data._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/records", "host": ["{{baseUrl}}"], "path": ["records"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1500.00,\n  \"type\": \"income\",\n  \"category\": \"Salary\",\n  \"date\": \"2026-04-01\",\n  \"description\": \"Monthly salary for April\",\n  \"tags\": [\"salary\", \"monthly\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Create a new financial record.\n\n**Required fields:** `amount`, `type`, `category`\n**Optional fields:** `date` (defaults to now), `description`, `tags`\n\n**Validation:**\n- `amount` must be > 0\n- `type` must be `income` or `expense`\n- `category` cannot be empty\n- `description` max 500 characters\n\n✅ Auto-saves `recordId` to environment on success.\n\n🔐 Analyst or Admin role required"
+          },
+          "response": [
+            {
+              "name": "201 — Created",
+              "status": "Created",
+              "code": 201,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Record created successfully\",\n  \"data\": {\n    \"_id\": \"661f2b3c4d5e6f7a8b9c0d1e\",\n    \"amount\": 1500,\n    \"type\": \"income\",\n    \"category\": \"Salary\",\n    \"date\": \"2026-04-01T00:00:00.000Z\",\n    \"description\": \"Monthly salary for April\",\n    \"tags\": [\"salary\", \"monthly\"],\n    \"isDeleted\": false,\n    \"createdBy\": { \"_id\": \"661f1a2b...\", \"username\": \"john_doe\" },\n    \"createdAt\": \"2026-04-03T05:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "403 — Viewer blocked",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Requires analyst or admin role\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Record",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/records/{{recordId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["records", "{{recordId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1800.00,\n  \"description\": \"Updated: salary + bonus\",\n  \"tags\": [\"salary\", \"bonus\", \"april\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Update an existing financial record. Only include the fields you want to change.\n\n**Updatable fields:** `amount`, `type`, `category`, `date`, `description`, `tags`\n\n**Access:**\n- Analyst: can only update their own records\n- Admin: can update any record\n\n🔐 Analyst or Admin role required"
+          },
+          "response": [
+            {
+              "name": "200 — Updated",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Record updated successfully\",\n  \"data\": {\n    \"_id\": \"661f2b3c4d5e6f7a8b9c0d1e\",\n    \"amount\": 1800,\n    \"type\": \"income\",\n    \"category\": \"Salary\",\n    \"description\": \"Updated: salary + bonus\",\n    \"tags\": [\"salary\", \"bonus\", \"april\"]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Record",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/records/{{recordId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["records", "{{recordId}}"]
+            },
+            "description": "Delete a financial record.\n\n**Analyst role:** Soft delete — sets `isDeleted: true`, record is hidden but recoverable.\n**Admin role:** Hard delete — permanently removes the record from the database.\n\n🔐 Analyst or Admin role required"
+          },
+          "response": [
+            {
+              "name": "200 — Soft deleted (Analyst)",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Record deleted successfully\"\n}"
+            },
+            {
+              "name": "200 — Hard deleted (Admin)",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Record permanently deleted\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Deleted Records",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/records/deleted?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["records", "deleted"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Returns all soft-deleted records with their deletion timestamps.\n\nUseful for auditing and recovery.\n\n🔐 Admin only"
+          },
+          "response": [
+            {
+              "name": "200 — Deleted records",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"records\": [\n      {\n        \"_id\": \"661f2b3c4d5e6f7a8b9c0d1e\",\n        \"amount\": 500,\n        \"type\": \"expense\",\n        \"category\": \"Travel\",\n        \"isDeleted\": true,\n        \"deletedAt\": \"2026-04-02T08:00:00.000Z\"\n      }\n    ],\n    \"pagination\": { \"current\": 1, \"pages\": 1, \"total\": 1 }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Restore Deleted Record",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/records/{{recordId}}/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["records", "{{recordId}}", "restore"]
+            },
+            "description": "Restores a soft-deleted record — sets `isDeleted: false` and clears `deletedAt`.\n\nOnly works on records that have been soft-deleted.\n\n🔐 Admin only"
+          },
+          "response": [
+            {
+              "name": "200 — Restored",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Record restored successfully\",\n  \"data\": {\n    \"_id\": \"661f2b3c4d5e6f7a8b9c0d1e\",\n    \"amount\": 500,\n    \"type\": \"expense\",\n    \"category\": \"Travel\",\n    \"isDeleted\": false,\n    \"deletedAt\": null\n  }\n}"
+            },
+            {
+              "name": "404 — Not found or not deleted",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Deleted record not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📊 Dashboard Analytics",
+      "description": "Aggregated analytics endpoints for the dashboard UI.\n\n- **Viewer:** `summary` only, scoped to own records\n- **Analyst / Admin:** all endpoints, global data\n\n🔐 All routes require: `Authorization: Bearer {{token}}`",
+      "item": [
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary?period=month",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "summary"],
+              "query": [
+                { "key": "period", "value": "month", "description": "week | month | year | all" }
+              ]
+            },
+            "description": "Returns a comprehensive dashboard summary including:\n- Total income, expenses, and net balance\n- Transaction counts\n- Category breakdown (top 10)\n- Recent activity (last 10 records)\n- Monthly trend data\n- Weekly trend data\n\n**Period options:** `week` · `month` · `year` · `all`\n\n**Viewer:** scoped to own records. **Analyst / Admin:** global data across all users.\n\n🔐 All roles"
+          },
+          "response": [
+            {
+              "name": "200 — Month summary",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"period\": \"month\",\n    \"totals\": {\n      \"income\": 8500,\n      \"incomeCount\": 4,\n      \"expenses\": 3200,\n      \"expenseCount\": 11,\n      \"balance\": 5300,\n      \"totalTransactions\": 15\n    },\n    \"categoryBreakdown\": [\n      { \"_id\": { \"category\": \"Salary\", \"type\": \"income\" }, \"total\": 5000, \"count\": 1 },\n      { \"_id\": { \"category\": \"Freelance\", \"type\": \"income\" }, \"total\": 3500, \"count\": 3 },\n      { \"_id\": { \"category\": \"Food\", \"type\": \"expense\" }, \"total\": 800, \"count\": 5 }\n    ],\n    \"recentActivity\": [\n      {\n        \"_id\": \"661f2b3c...\",\n        \"amount\": 200,\n        \"type\": \"expense\",\n        \"category\": \"Food\",\n        \"date\": \"2026-04-03T07:00:00.000Z\",\n        \"createdBy\": { \"username\": \"john_doe\" }\n      }\n    ],\n    \"monthlyTrends\": [\n      { \"_id\": { \"year\": 2026, \"month\": 3 }, \"income\": 5000, \"expenses\": 2800, \"count\": 12 },\n      { \"_id\": { \"year\": 2026, \"month\": 4 }, \"income\": 8500, \"expenses\": 3200, \"count\": 15 }\n    ],\n    \"weeklyTrends\": [\n      { \"_id\": { \"year\": 2026, \"week\": 13 }, \"income\": 4000, \"expenses\": 1500, \"count\": 7 }\n    ]\n  }\n}"
+            },
+            {
+              "name": "400 — Invalid period",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid period. Must be one of: week, month, year, all\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Category Breakdown",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/category-breakdown?period=month&type=expense",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "category-breakdown"],
+              "query": [
+                { "key": "period", "value": "month", "description": "week | month | year | all" },
+                { "key": "type", "value": "expense", "description": "income | expense (optional filter)", "disabled": false }
+              ]
+            },
+            "description": "Returns total amounts and counts grouped by category and type.\n\nUseful for pie charts, bar charts, and category-level spending analysis.\n\n**Optional filters:**\n- `period` — `week` · `month` · `year` · `all`\n- `type` — `income` or `expense` (shows both if omitted)\n\n🔐 Analyst or Admin role required"
+          },
+          "response": [
+            {
+              "name": "200 — Breakdown by category",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    { \"_id\": { \"category\": \"Food\", \"type\": \"expense\" }, \"total\": 800, \"count\": 5 },\n    { \"_id\": { \"category\": \"Transport\", \"type\": \"expense\" }, \"total\": 450, \"count\": 8 },\n    { \"_id\": { \"category\": \"Utilities\", \"type\": \"expense\" }, \"total\": 320, \"count\": 3 }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Trends (Monthly / Weekly)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/trends?granularity=monthly",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "trends"],
+              "query": [
+                { "key": "granularity", "value": "monthly", "description": "monthly | weekly" }
+              ]
+            },
+            "description": "Returns income vs expense trend data over time.\n\nIdeal for line charts and area charts on the dashboard.\n\n**Granularity options:**\n- `monthly` — grouped by year + month\n- `weekly` — grouped by year + week number\n\n🔐 Analyst or Admin role required"
+          },
+          "response": [
+            {
+              "name": "200 — Monthly trends",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"granularity\": \"monthly\",\n    \"trends\": [\n      { \"_id\": { \"year\": 2026, \"month\": 1 }, \"income\": 5000, \"expenses\": 2200, \"count\": 10 },\n      { \"_id\": { \"year\": 2026, \"month\": 2 }, \"income\": 5000, \"expenses\": 1900, \"count\": 9 },\n      { \"_id\": { \"year\": 2026, \"month\": 3 }, \"income\": 7500, \"expenses\": 3100, \"count\": 14 },\n      { \"_id\": { \"year\": 2026, \"month\": 4 }, \"income\": 8500, \"expenses\": 3200, \"count\": 15 }\n    ]\n  }\n}"
+            },
+            {
+              "name": "200 — Weekly trends",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"granularity\": \"weekly\",\n    \"trends\": [\n      { \"_id\": { \"year\": 2026, \"week\": 14 }, \"income\": 2000, \"expenses\": 800, \"count\": 4 },\n      { \"_id\": { \"year\": 2026, \"week\": 15 }, \"income\": 3500, \"expenses\": 1200, \"count\": 6 }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "⚙️ Health Check",
+      "item": [
+        {
+          "name": "API Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
+            "description": "Confirm the API server is running and reachable. No authentication required."
+          },
+          "response": [
+            {
+              "name": "200 — Healthy",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Finance Dashboard API is running\",\n  \"timestamp\": \"2026-04-03T05:30:00.000Z\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
