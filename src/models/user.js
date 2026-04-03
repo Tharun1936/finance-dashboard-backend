@@ -1,64 +1,79 @@
+// User model - defines what a "User" looks like in our database
+// We use Mongoose Schema to describe the structure
+
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcryptjs'); // bcrypt is used to hash passwords securely
 
 const userSchema = new mongoose.Schema(
   {
     username: {
       type: String,
-      required: [true, 'Username is required'],
-      unique: true,
-      trim: true,
-      minlength: [3, 'Username must be at least 3 characters']
+      required: [true, 'Please provide a username'],
+      unique: true,     // no two users can have the same username
+      trim: true,       // removes extra spaces
+      minlength: [3, 'Username must be at least 3 characters'],
+      maxlength: [30, 'Username can be at most 30 characters']
     },
+
     email: {
       type: String,
-      required: [true, 'Email is required'],
+      required: [true, 'Please provide an email'],
       unique: true,
-      lowercase: true,
+      lowercase: true,  // always store emails in lowercase
       trim: true,
-      match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+      match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address']
     },
+
     password: {
       type: String,
-      required: [true, 'Password is required'],
+      required: [true, 'Please provide a password'],
       minlength: [6, 'Password must be at least 6 characters'],
-      select: false   // never returned in queries by default
+      select: false     // this field won't be returned in queries by default (security!)
     },
+
+    // Role controls what the user is allowed to do
     role: {
       type: String,
-      enum: {
-        values: ['viewer', 'analyst', 'admin'],
-        message: 'Role must be viewer, analyst, or admin'
-      },
-      default: 'viewer'
+      enum: ['viewer', 'analyst', 'admin'], // only these 3 values are allowed
+      default: 'viewer'  // new users start as viewers
     },
+
+    // Status lets admins deactivate a user without deleting them
     status: {
       type: String,
-      enum: {
-        values: ['active', 'inactive'],
-        message: 'Status must be active or inactive'
-      },
+      enum: ['active', 'inactive'],
       default: 'active'
     }
   },
-  { timestamps: true }
+  {
+    timestamps: true  // automatically adds createdAt and updatedAt fields
+  }
 );
 
-// ─── Hash password before saving ──────────────────────────────────────────────
+// --- Hash password before saving to database ---
+// We never store plain text passwords - that's a huge security risk!
+// This runs automatically before every .save()
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  // Only hash if the password was actually changed
+  if (!this.isModified('password')) {
+    return next();
+  }
+
+  // 12 is the "salt rounds" - higher = more secure but slower
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
 
-// ─── Instance method: verify password ─────────────────────────────────────────
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+// --- Method to check if a password is correct during login ---
+// We compare the entered password with our stored hashed password
+userSchema.methods.comparePassword = async function (enteredPassword) {
+  return bcrypt.compare(enteredPassword, this.password);
 };
 
-// ─── Virtual: safe public profile (no password) ───────────────────────────────
+// --- Remove password from any JSON response ---
+// Even if select:false fails, this is a backup to never send the password
 userSchema.set('toJSON', {
-  transform: (_doc, ret) => {
+  transform: function (doc, ret) {
     delete ret.password;
     return ret;
   }

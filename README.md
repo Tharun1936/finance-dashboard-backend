@@ -1,197 +1,164 @@
-# Zorvyn — Finance Dashboard Backend API
+# Finance Dashboard Backend API
 
-> **Submission for:** Backend Engineering Internship — Online Assessment  
-> **Stack:** Node.js · Express v5 · MongoDB Atlas · Mongoose · JWT  
-> **Author note:** All core requirements are implemented. Optional enhancements (soft delete, pagination, search, logout blacklist) are also included and documented below.
-
----
-
-## Quick Links
-
-| What you're looking for | Where to find it |
-|-------------------------|-----------------|
-| How to run the project | [Getting Started](#getting-started) |
-| All API endpoints | [API Reference](#api-reference) |
-| Role & permission matrix | [Roles & Permissions](#roles--permissions) |
-| Data model definitions | [Data Models](#data-models) |
-| How errors are handled | [Validation & Error Handling](#validation--error-handling) |
-| Design rationale | [Design Decisions & Tradeoffs](#design-decisions--tradeoffs) |
-| What optional features were added | [Optional Enhancements Implemented](#optional-enhancements-implemented) |
+> A backend API I built for managing financial records with user roles and a dashboard summary.
+> Built using **Node.js**, **Express**, and **MongoDB Atlas**.
 
 ---
 
-## Requirements Coverage
+## What is this project?
 
-This section maps every stated requirement to where it is implemented.
+This is a REST API backend for a finance dashboard system. Different users (viewers, analysts, admins) can interact with financial data based on what they're allowed to do.
 
-| Requirement | Status | Location |
-|-------------|--------|----------|
-| User creation & management | ✅ Done | `controllers/usercontroller.js`, `routes/users.js` |
-| Role assignment (viewer / analyst / admin) | ✅ Done | `models/user.js`, `middleware/rolecheck.js` |
-| User status (active / inactive) | ✅ Done | `models/user.js`, `PATCH /api/users/:id/status` |
-| Role-based access control | ✅ Done | `middleware/rolecheck.js`, all route files |
-| Financial record CRUD | ✅ Done | `controllers/recordcontroller.js`, `routes/records.js` |
-| Record fields: amount, type, category, date, description | ✅ Done | `models/financialrecord.js` |
-| Filtering by date, category, type | ✅ Done | `GET /api/records` with query params |
-| Dashboard: total income / expenses / balance | ✅ Done | `services/dashboardservice.js` |
-| Dashboard: category-wise totals | ✅ Done | `GET /api/dashboard/category-breakdown` |
-| Dashboard: recent activity | ✅ Done | `getDashboardData()` in dashboard service |
-| Dashboard: monthly & weekly trends | ✅ Done | `GET /api/dashboard/trends`, dashboard service |
-| Access control enforcement | ✅ Done | `middleware/auth.js`, `middleware/rolecheck.js` |
-| Input validation | ✅ Done | `express-validator` in all routes, `utils/validation.js` |
-| Meaningful error responses | ✅ Done | Consistent `{ success, message, errors }` shape |
-| Correct HTTP status codes | ✅ Done | 200, 201, 400, 401, 403, 404, 409, 500 |
-| Data persistence (MongoDB) | ✅ Done | `config/db.js`, Mongoose models |
-| JWT Authentication | ✅ Done | `controllers/authcontroller.js`, `middleware/auth.js` |
-| Pagination | ✅ Done | All list endpoints |
-| Search support | ✅ Done | `GET /api/records?search=` |
-| Soft delete | ✅ Done | `isDeleted` flag + Mongoose pre-find hook |
-| Logout / token invalidation | ✅ Done | `models/blacklistmodel.js`, `POST /api/auth/logout` |
+Here's the basic idea of how it works:
+- Users register and log in — they get a JWT token back
+- That token is sent with every request so the server knows who you are
+- Depending on your role, you can view, create, update, or delete financial records
+- There's a dashboard that gives you summary stats like total income, expenses, and trends
 
 ---
 
-## Project Structure
+## Tech Stack
 
-The codebase follows a layered architecture with clear separation of concerns:
+| What | Tool |
+|------|------|
+| Runtime | Node.js |
+| Framework | Express.js |
+| Database | MongoDB Atlas (via Mongoose) |
+| Authentication | JWT (JSON Web Tokens) |
+| Password Hashing | bcryptjs |
+| Input Validation | express-validator |
+| Dev tool | nodemon (auto-restarts on save) |
+
+---
+
+## Folder Structure
+
+I organized the project so each file has one clear job:
 
 ```
 finance-dashboard-backend/
-├── server.js                      # Entry point: DB connect → start server
-├── .env                           # Environment config (not committed)
+├── server.js              ← entry point, connects DB and starts server
+├── .env                   ← secret keys (never commit this!)
 ├── package.json
 └── src/
-    ├── app.js                     # Express setup, route mounting, error handlers
-    │
+    ├── app.js             ← sets up Express, connects all routes
     ├── config/
-    │   └── db.js                  # MongoDB connection with error handling
-    │
-    ├── models/                    # Mongoose schemas — data shape + validation
-    │   ├── user.js                # User: role, status, bcrypt hooks, toJSON transform
-    │   ├── financialrecord.js     # Record: soft delete, indexes, pre-find filter
-    │   └── blacklistmodel.js     # Invalidated JWT tokens (logout support)
-    │
-    ├── controllers/               # Request/response handlers — no raw DB logic here
-    │   ├── authcontroller.js      # register, login, logout, getMe
-    │   ├── usercontroller.js      # Admin CRUD: list, get, role, status, delete
-    │   ├── recordcontroller.js    # Record CRUD + soft/hard delete + restore
-    │   └── dashboardcontroller.js # Summary, category breakdown, trends
-    │
-    ├── services/                  # Business logic layer — complex aggregations
-    │   └── dashboardservice.js    # MongoDB pipelines: totals, trends, categories
-    │
-    ├── routes/                    # Route definitions with validation rules
-    │   ├── auth.js                # /api/auth/*
-    │   ├── users.js               # /api/users/*  (admin only)
-    │   ├── records.js             # /api/records/*
-    │   └── dashboard.js           # /api/dashboard/*
-    │
+    │   └── db.js          ← MongoDB connection logic
+    ├── models/
+    │   ├── user.js        ← what a user looks like in the DB
+    │   ├── financialrecord.js  ← what a financial record looks like
+    │   └── blacklistmodel.js  ← stores logged-out tokens
+    ├── controllers/
+    │   ├── authcontroller.js   ← handles register, login, logout
+    │   ├── usercontroller.js   ← admin manages users here
+    │   ├── recordcontroller.js ← CRUD for financial records
+    │   └── dashboardcontroller.js ← handles summary/analytics
+    ├── services/
+    │   └── dashboardservice.js ← MongoDB aggregation logic for the dashboard
+    ├── routes/
+    │   ├── auth.js        ← /api/auth/* routes
+    │   ├── users.js       ← /api/users/* routes
+    │   ├── records.js     ← /api/records/* routes
+    │   └── dashboard.js   ← /api/dashboard/* routes
     ├── middleware/
-    │   ├── auth.js                # JWT verify + blacklist check + status check
-    │   └── rolecheck.js           # requireViewer / requireAnalyst / requireAdmin
-    │
+    │   ├── auth.js        ← checks if you're logged in (JWT verify)
+    │   └── rolecheck.js   ← checks if you have the right role
     └── utils/
-        └── validation.js          # Converts express-validator errors → clean JSON
+        └── validation.js  ← formats express-validator error messages
 ```
-
-**Architecture principle:** Routes → Controllers → Services → Models. Each layer only communicates with the layer immediately below it.
 
 ---
 
-## Getting Started
+## How to Run This Locally
 
-### Prerequisites
-- Node.js 18+
-- MongoDB Atlas account (or local MongoDB)
-
-### Setup
+### Step 1 — Clone and install
 
 ```bash
-# Install dependencies
+git clone https://github.com/Tharun1936/finance-dashboard-backend.git
 cd finance-dashboard-backend
 npm install
-
-# Development (hot reload)
-npm run dev
-
-# Production
-npm start
 ```
 
-Server starts at `http://localhost:5000`
+### Step 2 — Set up environment variables
 
-### Verify the server
+Create a `.env` file in the root folder:
+
+```env
+NODE_ENV=development
+PORT=5000
+MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/<dbname>
+JWT_SECRET=make_this_a_long_random_string
+```
+
+> You'll need a free MongoDB Atlas account at [mongodb.com/atlas](https://www.mongodb.com/atlas)
+
+### Step 3 — Start the server
+
+```bash
+npm run dev   # development mode with auto-reload
+npm start     # production mode
+```
+
+### Step 4 — Test it's working
 
 ```
-GET /api/health
+GET http://localhost:5000/api/health
 ```
 
+You should see:
 ```json
 {
   "success": true,
-  "message": "Finance Dashboard API is running",
-  "timestamp": "2026-04-03T05:30:00.000Z"
+  "message": "Finance Dashboard API is running!",
+  "time": "2026-04-03T..."
 }
 ```
 
 ---
 
-## Environment Variables
+## User Roles
 
-```env
-NODE_ENV=development
-PORT=5000
-MONGO_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/<dbname>
-JWT_SECRET=<long-random-secret>
+I defined 3 roles with different levels of access:
+
+| What they can do | Viewer | Analyst | Admin |
+|-----------------|--------|---------|-------|
+| Register / Login | ✅ | ✅ | ✅ |
+| View their own records | ✅ | ✅ | ✅ |
+| View ALL records | ❌ | ✅ | ✅ |
+| Create records | ❌ | ✅ | ✅ |
+| Edit records | ❌ | ✅ (own only) | ✅ |
+| Delete records (soft) | ❌ | ✅ (own only) | ✅ |
+| Delete records (permanent) | ❌ | ❌ | ✅ |
+| Restore deleted records | ❌ | ❌ | ✅ |
+| See dashboard summary | ✅ (own data) | ✅ (all data) | ✅ |
+| See category/trend charts | ❌ | ✅ | ✅ |
+| Manage users | ❌ | ❌ | ✅ |
+
+**How it's enforced:**
+- `middleware/auth.js` — verifies the JWT token on every protected request
+- `middleware/rolecheck.js` — checks if the user's role is allowed for that route
+
+---
+
+## API Endpoints
+
+All protected routes need this header:
+```
+Authorization: Bearer <your_token>
 ```
 
 ---
 
-## Roles & Permissions
+### Auth Routes `/api/auth`
 
-Three roles with clearly enforced boundaries:
+| Method | Route | Auth needed? | What it does |
+|--------|-------|-------------|-------------|
+| POST | `/register` | No | Create a new account |
+| POST | `/login` | No | Login and get token |
+| POST | `/logout` | Yes | Invalidate your token |
+| GET | `/me` | Yes | Get your own profile |
 
-| Permission                         | Viewer     | Analyst       | Admin  |
-|------------------------------------|------------|---------------|--------|
-| Register / Login                   | ✅         | ✅            | ✅     |
-| View own financial records         | ✅         | ✅            | ✅     |
-| View all records (global scope)    | ❌         | ✅            | ✅     |
-| Create financial records           | ❌         | ✅            | ✅     |
-| Update records                     | ❌         | ✅ (own only) | ✅     |
-| Soft delete records                | ❌         | ✅ (own only) | ✅     |
-| Hard delete records (permanent)    | ❌         | ❌            | ✅     |
-| Restore soft-deleted records       | ❌         | ❌            | ✅     |
-| Dashboard summary                  | ✅ (scoped)| ✅ (global)   | ✅     |
-| Category breakdown & trend data    | ❌         | ✅            | ✅     |
-| Manage users (CRUD)                | ❌         | ❌            | ✅     |
-| Assign or change roles             | ❌         | ❌            | ✅     |
-| Activate / deactivate accounts     | ❌         | ❌            | ✅     |
-
-**How enforcement works:**
-- `middleware/auth.js` verifies the JWT and loads the user on every protected request
-- `middleware/rolecheck.js` provides `requireViewer`, `requireAnalyst`, `requireAdmin` guards applied at the route level
-- Inside controllers, scope filtering is applied per-role (e.g. viewers only query `createdBy: req.user._id`)
-
----
-
-## API Reference
-
-All protected routes require:
-```
-Authorization: Bearer <jwt_token>
-```
-
----
-
-### Authentication — `/api/auth`
-
-| Method | Endpoint        | Auth | Description                      |
-|--------|-----------------|------|----------------------------------|
-| POST   | `/register`     | No   | Create account (defaults to viewer) |
-| POST   | `/login`        | No   | Authenticate, receive JWT        |
-| POST   | `/logout`       | Yes  | Invalidate token (JWT blacklist) |
-| GET    | `/me`           | Yes  | Get current user profile         |
-
-**Register body:**
+**Register request body:**
 ```json
 {
   "username": "john_doe",
@@ -201,7 +168,7 @@ Authorization: Bearer <jwt_token>
 }
 ```
 
-**Login body:**
+**Login request body:**
 ```json
 {
   "email": "john@example.com",
@@ -209,100 +176,92 @@ Authorization: Bearer <jwt_token>
 }
 ```
 
-**Successful login response:**
+**Login response:**
 ```json
 {
   "success": true,
   "message": "Login successful",
   "data": {
-    "user": { "id": "...", "username": "john_doe", "role": "viewer", "status": "active" },
-    "token": "eyJhbGciOiJIUzI1NiIs..."
+    "user": {
+      "id": "...",
+      "username": "john_doe",
+      "role": "viewer",
+      "status": "active"
+    },
+    "token": "eyJhbGci..."
   }
 }
 ```
 
 ---
 
-### User Management — `/api/users`
+### User Management Routes `/api/users`
 
-> **Admin role required for all endpoints.**
+> Only admins can use these
 
-| Method | Endpoint              | Description                          |
-|--------|-----------------------|--------------------------------------|
-| GET    | `/`                   | List users — paginated + filterable  |
-| GET    | `/:id`                | Get a specific user                  |
-| PATCH  | `/:id/role`           | Change a user's role                 |
-| PATCH  | `/:id/status`         | Activate or deactivate a user        |
-| DELETE | `/:id`                | Permanently delete a user            |
+| Method | Route | What it does |
+|--------|-------|-------------|
+| GET | `/` | List all users (with filters + pagination) |
+| GET | `/:id` | Get a specific user |
+| PATCH | `/:id/role` | Change someone's role |
+| PATCH | `/:id/status` | Activate or deactivate a user |
+| DELETE | `/:id` | Delete a user permanently |
 
-**Query params for `GET /api/users`:**
-
-| Param    | Type   | Description                         |
-|----------|--------|-------------------------------------|
-| `page`   | Number | Page number (default: 1)            |
-| `limit`  | Number | Results per page (max: 100)         |
-| `role`   | String | Filter: `viewer`, `analyst`, `admin`|
-| `status` | String | Filter: `active`, `inactive`        |
-| `search` | String | Match against username or email     |
-
-> **Note:** Admins cannot change their own role or status, and cannot delete themselves. These are enforced in the controller.
+**GET /api/users — optional query params:**
+- `?page=1&limit=10` — pagination
+- `?role=analyst` — filter by role
+- `?status=active` — filter by status
+- `?search=john` — search by name or email
 
 ---
 
-### Financial Records — `/api/records`
+### Financial Records Routes `/api/records`
 
-| Method | Endpoint          | Roles                        | Description                      |
-|--------|-------------------|------------------------------|----------------------------------|
-| GET    | `/`               | Viewer+                      | List records (paginated, filtered)|
-| GET    | `/:id`            | Viewer+                      | Get a single record by ID        |
-| POST   | `/`               | Analyst, Admin               | Create a new record              |
-| PUT    | `/:id`            | Analyst (own), Admin (any)   | Update an existing record        |
-| DELETE | `/:id`            | Analyst (soft), Admin (hard) | Delete a record                  |
-| GET    | `/deleted`        | Admin only                   | View soft-deleted records        |
-| PATCH  | `/:id/restore`    | Admin only                   | Restore a soft-deleted record    |
+| Method | Route | Who can use it | What it does |
+|--------|-------|---------------|-------------|
+| GET | `/` | Everyone | List records (with filters) |
+| GET | `/:id` | Everyone | Get one record |
+| POST | `/` | Analyst, Admin | Create a record |
+| PUT | `/:id` | Analyst (own), Admin | Edit a record |
+| DELETE | `/:id` | Analyst (soft), Admin (permanent) | Delete a record |
+| GET | `/deleted` | Admin only | See all soft-deleted records |
+| PATCH | `/:id/restore` | Admin only | Restore a deleted record |
 
-**Create / update body:**
+**Create record request body:**
 ```json
 {
   "amount": 1500.00,
   "type": "income",
   "category": "Salary",
   "date": "2026-04-01",
-  "description": "Monthly salary for April",
+  "description": "April salary",
   "tags": ["salary", "monthly"]
 }
 ```
 
-**Filter params for `GET /api/records`:**
-
-| Param       | Example                   | Description                        |
-|-------------|---------------------------|------------------------------------|
-| `type`      | `?type=expense`           | `income` or `expense`              |
-| `category`  | `?category=salary`        | Partial, case-insensitive match    |
-| `startDate` | `?startDate=2026-01-01`   | ISO 8601                           |
-| `endDate`   | `?endDate=2026-03-31`     | ISO 8601                           |
-| `search`    | `?search=rent`            | Searches category and description  |
-| `sortBy`    | `?sortBy=amount`          | `date`, `amount`, `category`       |
-| `sortOrder` | `?sortOrder=asc`          | `asc` or `desc`                    |
-| `page`      | `?page=2`                 | Pagination                         |
-| `limit`     | `?limit=10`               | Results per page (max: 100)        |
+**GET /api/records — optional filters:**
+- `?type=expense` — income or expense
+- `?category=food` — filter by category
+- `?startDate=2026-01-01&endDate=2026-03-31` — date range
+- `?search=rent` — search in category and description
+- `?sortBy=amount&sortOrder=asc` — sort results
+- `?page=1&limit=10` — pagination
 
 ---
 
-### Dashboard Analytics — `/api/dashboard`
+### Dashboard Routes `/api/dashboard`
 
-| Method | Endpoint                | Roles          | Description                         |
-|--------|-------------------------|----------------|-------------------------------------|
-| GET    | `/summary`              | Viewer+        | Totals, balance, recent activity, trends |
-| GET    | `/category-breakdown`   | Analyst, Admin | Income/expense totals per category  |
-| GET    | `/trends`               | Analyst, Admin | Monthly or weekly trend data        |
+| Method | Route | Who can use | What it does |
+|--------|-------|------------|-------------|
+| GET | `/summary` | Everyone | Total income, expenses, balance, recent records |
+| GET | `/category-breakdown` | Analyst, Admin | Totals grouped by category |
+| GET | `/trends` | Analyst, Admin | Monthly or weekly trend data |
 
-**`GET /api/dashboard/summary?period=month`**  
-`period` accepts: `week` · `month` · `year` · `all`
+**GET /api/dashboard/summary?period=month**
 
-> Viewers receive data scoped to their own records. Analysts and admins receive global data across all users.
+`period` can be: `week`, `month`, `year`, or `all`
 
-**Response shape:**
+Example response:
 ```json
 {
   "success": true,
@@ -310,151 +269,117 @@ Authorization: Bearer <jwt_token>
     "period": "month",
     "totals": {
       "income": 5000,
-      "incomeCount": 3,
       "expenses": 2000,
-      "expenseCount": 5,
       "balance": 3000,
       "totalTransactions": 8
     },
-    "categoryBreakdown": [ { "_id": { "category": "Salary", "type": "income" }, "total": 5000, "count": 3 } ],
+    "categoryBreakdown": [ ... ],
     "recentActivity": [ ... ],
-    "monthlyTrends": [ { "_id": { "year": 2026, "month": 4 }, "income": 5000, "expenses": 2000, "count": 8 } ],
+    "monthlyTrends": [ ... ],
     "weeklyTrends": [ ... ]
   }
 }
 ```
 
-**`GET /api/dashboard/trends?granularity=monthly`**  
-`granularity` accepts: `monthly` · `weekly`
+> **Note:** Viewers only see their own data. Analysts and Admins see everyone's data.
 
 ---
 
-## Data Models
+## Database Models
 
 ### User
-
-```js
-{
-  username : String,   // required, unique, 3–30 chars
-  email    : String,   // required, unique, validated, lowercased
-  password : String,   // required, bcrypt-hashed, select: false (never returned)
-  role     : Enum,     // 'viewer' | 'analyst' | 'admin' — default: 'viewer'
-  status   : Enum,     // 'active' | 'inactive' — default: 'active'
-  createdAt: Date,     // auto
-  updatedAt: Date      // auto
-}
+```
+username  - String, required, unique
+email     - String, required, unique
+password  - String, bcrypt hashed, never returned in API responses
+role      - "viewer" | "analyst" | "admin"  (default: viewer)
+status    - "active" | "inactive"  (default: active)
+createdAt - auto
+updatedAt - auto
 ```
 
-Notable implementation details:
-- Password is hashed via a `pre('save')` Mongoose hook using bcrypt (12 salt rounds)
-- `select: false` on the password field means it's excluded from all query results by default
-- A `toJSON` transform strips the password field before any response serialization
-
-### FinancialRecord
-
-```js
-{
-  amount     : Number,    // required, min: 0.01
-  type       : Enum,      // 'income' | 'expense'
-  category   : String,    // required, max 100 chars
-  date       : Date,      // defaults to Date.now
-  description: String,    // optional, max 500 chars
-  tags       : [String],  // optional labels array
-  isDeleted  : Boolean,   // soft delete flag, default: false
-  deletedAt  : Date,      // set when soft-deleted
-  createdBy  : ObjectId,  // ref: User
-  createdAt  : Date,      // auto
-  updatedAt  : Date       // auto
-}
+### Financial Record
 ```
-
-Notable implementation details:
-- Compound indexes on `{ createdBy, date }` and `{ type, category }` for efficient filtering
-- A Mongoose `pre(/^find/)` hook automatically excludes soft-deleted records from all queries — callers don't need to manually add `isDeleted: false`
+amount      - Number, required, must be > 0
+type        - "income" | "expense", required
+category    - String, required
+date        - Date (defaults to today)
+description - String, optional
+tags        - Array of strings, optional
+isDeleted   - Boolean (for soft delete, default: false)
+deletedAt   - Date (set when soft deleted)
+createdBy   - Reference to User who created this
+```
 
 ---
 
-## Validation & Error Handling
+## Error Handling
 
-All inputs are validated using `express-validator` before reaching any controller. The `utils/validation.js` middleware intercepts errors and formats them consistently.
+All errors return in the same format so the frontend always knows what to expect:
 
-**Validation error response shape:**
 ```json
 {
   "success": false,
-  "message": "Validation failed",
+  "message": "What went wrong",
   "errors": [
-    { "field": "amount", "message": "Amount must be a positive number" },
-    { "field": "type",   "message": "Type must be income or expense" }
+    { "field": "email", "message": "Please enter a valid email address" }
   ]
 }
 ```
 
-**HTTP status code usage:**
+**HTTP status codes I used:**
 
-| Code | When it is used |
-|------|-----------------|
-| `200` | Successful read or update |
-| `201` | Successful resource creation |
-| `400` | Validation errors or bad input |
-| `401` | Missing, expired, or blacklisted token |
-| `403` | Valid token, insufficient role / inactive account |
-| `404` | Resource not found |
-| `409` | Conflict — duplicate email or username |
-| `500` | Unexpected server error |
-
-**Other error handling details:**
-- Expired JWT (`TokenExpiredError`) and invalid JWT (`JsonWebTokenError`) return distinct 401 messages
-- Inactive users are blocked at the auth middleware level with a clear 403 message
-- Admins are prevented from modifying their own role, status, or deleting themselves (enforced in usercontroller)
-- Global error handler in `app.js` catches any unhandled errors and returns a 500 with consistent formatting
+| Code | Meaning |
+|------|---------|
+| 200 | Success |
+| 201 | Created successfully |
+| 400 | Bad input / validation failed |
+| 401 | Not logged in / bad token |
+| 403 | Logged in but don't have permission |
+| 404 | Resource not found |
+| 409 | Already exists (duplicate email etc.) |
+| 500 | Server error |
 
 ---
 
-## Optional Enhancements Implemented
+## Extra Features I Added
 
-The following optional features from the assessment were all implemented:
+These weren't required but I added them to make the project more complete:
 
-| Optional Feature | Implementation |
-|------------------|---------------|
-| **JWT Authentication** | `POST /api/auth/login` returns a signed JWT; all protected routes verify it via `middleware/auth.js` |
-| **Logout / token invalidation** | Logged-out tokens are stored in a MongoDB `blacklistTokens` collection and rejected on every subsequent request |
-| **Pagination** | All list endpoints (`/api/records`, `/api/users`) support `page` and `limit` query parameters |
-| **Search support** | `GET /api/records?search=` performs partial matching across `category` and `description` fields |
-| **Soft delete** | Records are soft-deleted by setting `isDeleted: true` and `deletedAt: <timestamp>`; a Mongoose pre-find hook hides them automatically |
-| **Restore deleted records** | `PATCH /api/records/:id/restore` allows admins to bring back soft-deleted records |
-| **Sorting** | Records support `sortBy` and `sortOrder` query params |
+- **JWT Logout** — When you log out, the token is stored in a `BlacklistToken` collection so it can't be reused even before it expires
+- **Soft Delete** — Records aren't permanently deleted right away. They get marked as `isDeleted: true` so admins can restore them if needed
+- **Pagination** — Every list endpoint supports `?page=` and `?limit=` to avoid loading everything at once
+- **Search** — Records can be searched by category or description using `?search=`
+- **Sorting** — Records can be sorted by any field using `?sortBy=` and `?sortOrder=`
+- **Role-scoped data** — Viewers only see their own records; analysts/admins see all records
 
 ---
 
-## Design Decisions & Tradeoffs
+## Design Decisions (and why I made them)
 
-### Architecture: Layered MVC
-The project follows a clean layered architecture: Routes → Controllers → Services → Models. This ensures:
-- Routes only contain validation middleware
-- Controllers only handle HTTP input/output
-- Services contain all complex aggregation logic
-- Models define schema and data-level hooks
+**Why MongoDB?**
+Financial records can have different fields (some have tags, some don't, etc.). MongoDB handles this flexibility better than a relational DB for this use case. Also the aggregation pipeline makes the dashboard queries easy to write.
 
-This separation makes each layer independently testable and maintainable.
+**Why JWT + Blacklist for logout?**
+JWT tokens don't expire early on their own — once issued, they're valid till expiry. To properly support logout, I store them in a MongoDB blacklist and check it on every request. In a real production app with high traffic, Redis would be faster for this, but MongoDB is simpler for this project.
 
-### JWT + MongoDB Blacklist for Logout
-JWTs are stateless — once issued, they can't be "cancelled" without tracking them. A blacklist in MongoDB solves this cleanly at this scale.
+**Why soft delete?**
+Permanently deleting financial records is risky — what if it was a mistake? Soft delete lets you mark records as deleted but restore them later. Only admins can permanently delete or restore.
 
-**Tradeoff:** Every authenticated request makes one additional DB lookup. For high-traffic production systems, a Redis blacklist would be more efficient. For this assessment scope, MongoDB keeps the stack simple.
+**Why separate controllers, routes, services?**
+I tried to follow a clean structure:
+- Routes → only define paths + validation
+- Controllers → handle the request and response
+- Services → complex logic (like MongoDB aggregations for the dashboard)
+- Models → describe what data looks like
 
-### Soft Delete with Auto-Filter Hook
-Rather than deleting records permanently, analysts soft-delete them by setting `isDeleted: true`. A Mongoose `pre(/^find/)` hook applies `{ isDeleted: false }` to every find query automatically, so no caller needs to remember to add the filter.
+This makes the code easier to understand and maintain.
 
-**Tradeoff:** The hook intercepts all finds, which requires careful opt-out when the admin explicitly queries deleted records. This is handled by using a direct aggregation pipeline (`FinancialRecord.aggregate`) in the deleted records endpoint which bypasses query hooks.
+---
 
-### Role-Scoped Data at the Controller Level
-Data scoping (viewers see only their own records) is enforced in the controller by conditionally building the query filter, not purely at the route level. This is intentional — it makes the access-control logic visible and auditable in one place (the controller) rather than split across route guards and query logic.
+## Assumptions I Made
 
-### Assumptions Made
-
-1. New registrations always default to `viewer`. Role elevation must be done by an admin.
-2. Analysts can only soft-delete their own records. Admins can hard-delete any record.
-3. Admins see globally scoped dashboard data; viewers see only their own.
-4. The `mongodb` npm package listed in the original `package.json` is unused — all database interaction goes through Mongoose.
-5. Rate limiting and request logging are not implemented in this version — they are straightforward additions for a production deployment.
+1. New accounts always start as `viewer` — admins must manually promote them
+2. Analysts can only edit/delete their own records; admins can touch any record
+3. Viewers see dashboard data only for their own transactions
+4. Rate limiting and logging are not implemented (would add them in a real production setup)
