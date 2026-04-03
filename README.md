@@ -3,7 +3,6 @@
 > A backend API I built for managing financial records with user roles and a dashboard summary.
 > Built using **Node.js**, **Express**, and **MongoDB Atlas**.
 
----
 
 ## What is this project?
 
